@@ -1,5 +1,7 @@
 # BankRAG Enterprise Reference Repo (Flowise + LangChain JS + LlamaIndex Py)
 
+![alt text](image.png)
+
 **목표**
 - (1) 문서 업로드 API: 업로드 → 파싱 → (S3 저장) → 비동기 인덱싱
 - (2) 멀티 테넌트: 부서/권한별 **Qdrant collection** 분리
@@ -147,3 +149,24 @@ Endpoints 추가:
 - `flowise/flows/`에 **채팅용 RAG**, **인덱싱용(업로드→분할→업서트)** 플로우 템플릿 **예시(JSON)** 및
   **Flowise UI에서 재구성하는 체크리스트**를 제공합니다.
 - Flowise Export JSON 포맷은 버전에 따라 변화가 있어, 템플릿은 "구성 요소/노드 체크리스트 + 예시" 형태로 제공합니다.
+
+---
+```
+cd /home/AI-Flowise-RAG
+cp .env.example .env
+
+# 이미지 받기
+docker compose --env-file .env pull
+
+# 기동
+docker compose --env-file .env up -d --build
+
+# 모델 미리 받기 (이제 무조건 이 방식 권장)
+docker compose --env-file .env exec ollama ollama pull llama3.1:8b
+docker compose --env-file .env exec ollama ollama pull nomic-embed-text
+
+# 상태 확인
+docker compose ps
+curl http://localhost:11434/api/tags | head
+```
+
