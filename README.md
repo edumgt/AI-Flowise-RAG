@@ -1,6 +1,22 @@
 # BankRAG Enterprise Reference Repo (Flowise + LangChain JS + LlamaIndex Py)
 
-![alt text](image.png)
+![alt text](./images/image.png)
+
+![alt text](./images/image-1.png)
+
+![alt text](./images/image-2.png)
+
+![alt text](./images/image-3.png)
+
+![alt text](./images/image-4.png)
+
+![alt text](./images/image-5.png)
+
+![alt text](./images/image-6.png)
+
+![alt text](./images/image-8.png)
+
+![alt text](./images/image-9.png)
 
 **목표**
 - (1) 문서 업로드 API: 업로드 → 파싱 → (S3 저장) → 비동기 인덱싱
@@ -23,6 +39,17 @@ docker exec -it bankrag-enterprise-ollama-1 ollama pull llama3.1:8b
 docker exec -it bankrag-enterprise-ollama-1 ollama pull nomic-embed-text
 ```
 
+---
+```
+docker exec -it bankrag-enterprise-ollama-1 ollama list
+```
+---
+```
+root@DESKTOP-D6A344Q:/home/AI-Flowise-RAG# docker exec -it bankrag-enterprise-ollama-1 ollama list
+NAME                       ID              SIZE      MODIFIED       
+nomic-embed-text:latest    0a109f422b47    274 MB    41 seconds ago    
+llama3.1:8b                46e0c10c039e    4.9 GB    54 seconds ago   
+```
 
 ### 1) 환경변수
 ```bash
