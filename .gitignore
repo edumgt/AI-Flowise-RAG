@@ -1,0 +1,9 @@
+.env
+node_modules
+**/__pycache__
+**/*.pyc
+.qdrant
+.flowise
+qdrant_data
+flowise_data
+.DS_Store

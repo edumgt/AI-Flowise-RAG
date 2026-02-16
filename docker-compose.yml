@@ -1,0 +1,76 @@
+name: flowise-rag-examples
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.10.1
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:6333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  flowise:
+    image: flowiseai/flowise:3.0.13
+    container_name: flowise
+    env_file: .env
+    environment:
+      PORT: 3000
+      FLOWISE_USERNAME: ${FLOWISE_USERNAME:-admin}
+      FLOWISE_PASSWORD: ${FLOWISE_PASSWORD:-admin1234}
+      # Persist Flowise sqlite DB + secrets + logs
+      DATABASE_PATH: /root/.flowise
+      SECRETKEY_PATH: /root/.flowise
+      LOG_PATH: /root/.flowise/logs
+      FLOWISE_FILE_SIZE_LIMIT: 50mb
+    ports:
+      - "3000:3000"
+    volumes:
+      - flowise_data:/root/.flowise
+    depends_on:
+      qdrant:
+        condition: service_healthy
+
+  langchain_api:
+    build:
+      context: ./apps/langchain-js
+      dockerfile: Dockerfile
+    container_name: langchain-api
+    env_file: .env
+    environment:
+      PORT: 3001
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_docs}
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./docs:/docs:ro
+    depends_on:
+      qdrant:
+        condition: service_healthy
+
+  llamaindex_api:
+    build:
+      context: ./apps/llamaindex-py
+      dockerfile: Dockerfile
+    container_name: llamaindex-api
+    env_file: .env
+    environment:
+      PORT: 8000
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_docs}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./docs:/docs:ro
+    depends_on:
+      qdrant:
+        condition: service_healthy
+
+volumes:
+  qdrant_data:
+  flowise_data:
