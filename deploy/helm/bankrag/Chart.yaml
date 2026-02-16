@@ -1,0 +1,6 @@
+apiVersion: v2
+name: bankrag
+description: BankRAG enterprise stack (gateway/worker/langchain/llamaindex/otel)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

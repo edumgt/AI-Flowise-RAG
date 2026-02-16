@@ -1,21 +1,161 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Bank RAG Workspace</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>BankRAG Console</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    /* Offcanvas transition helpers (tailwind로도 가능하지만 UX 안정화용) */
-    .offcanvas { transform: translateX(-100%); transition: transform 180ms ease; }
-    .offcanvas.open { transform: translateX(0); }
-    .backdrop { opacity: 0; pointer-events: none; transition: opacity 180ms ease; }
-    .backdrop.open { opacity: 1; pointer-events: auto; }
-    .toast { transition: transform 180ms ease, opacity 180ms ease; }
-  </style>
 </head>
-<body class="bg-slate-950 text-slate-100">
-  <div id="app"></div>
+<body class="bg-slate-50 text-slate-900">
+  <div class="min-h-screen flex">
+    <!-- Sidebar (desktop) -->
+    <aside class="hidden lg:flex w-72 bg-white border-r border-slate-200 flex-col">
+      <div class="p-5 border-b border-slate-200">
+        <div class="text-xl font-semibold">BankRAG</div>
+        <div class="text-sm text-slate-500 mt-1">Enterprise Console</div>
+      </div>
+      <nav class="p-4 space-y-2">
+        <button id="navChat" class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100">💬 Chat</button>
+        <button id="navUpload" class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100">📄 Upload</button>
+        <button id="navJobs" class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100">🧾 Jobs</button>
+        <button id="navSettings" class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100">⚙️ Settings</button>
+      </nav>
+      <div class="mt-auto p-4 border-t border-slate-200">
+        <div class="text-xs text-slate-500">Trace / Metrics: Jaeger, Prometheus, Grafana</div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1">
+      <!-- Topbar -->
+      <header class="sticky top-0 bg-white border-b border-slate-200 z-20">
+        <div class="h-14 px-4 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <button id="openOffcanvas" class="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg hover:bg-slate-100">
+              ☰
+            </button>
+            <div class="font-semibold">BankRAG Console</div>
+            <span id="badgeScope" class="ml-2 text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700">guest</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <a class="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white hover:opacity-90" href="http://localhost:16686" target="_blank">Jaeger</a>
+            <a class="text-xs px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50" href="http://localhost:3006" target="_blank">Grafana</a>
+            <button id="btnLogout" class="text-xs px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50">Logout</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="max-w-6xl mx-auto p-4 lg:p-8 space-y-6">
+        <!-- Login card -->
+        <section id="panelLogin" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+          <div class="text-lg font-semibold">로그인</div>
+          <div class="text-sm text-slate-500 mt-1">데모 계정: admin / teller / risk / aml</div>
+          <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input id="inpUser" class="px-3 py-2 rounded-lg border border-slate-200" placeholder="username" value="admin"/>
+            <input id="inpPass" class="px-3 py-2 rounded-lg border border-slate-200" placeholder="password" type="password" value="admin1234"/>
+            <button id="btnLogin" class="px-4 py-2 rounded-lg bg-slate-900 text-white hover:opacity-90">Login</button>
+          </div>
+          <div id="loginMsg" class="text-sm mt-3 text-rose-600 hidden"></div>
+        </section>
+
+        <!-- Workspace -->
+        <section id="panelWorkspace" class="hidden space-y-6">
+          <!-- Context bar -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+              <div>
+                <div class="text-sm text-slate-500">현재 스코프</div>
+                <div class="font-semibold" id="currentScope">-</div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-2 w-full md:w-auto">
+                <select id="selTenant" class="px-3 py-2 rounded-lg border border-slate-200"></select>
+                <select id="selDept" class="px-3 py-2 rounded-lg border border-slate-200"></select>
+                <select id="selEngine" class="px-3 py-2 rounded-lg border border-slate-200">
+                  <option value="llamaindex">LlamaIndex (Py)</option>
+                  <option value="langchain">LangChain (JS)</option>
+                  <option value="flowise">Flowise</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Upload -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-lg font-semibold">문서 업로드 → 비동기 인덱싱</div>
+                <div class="text-sm text-slate-500">PDF/DOCX/TXT/MD (20MB)</div>
+              </div>
+            </div>
+            <div class="mt-4 flex flex-col md:flex-row gap-3 md:items-center">
+              <input id="fileInput" type="file" class="block w-full text-sm text-slate-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"/>
+              <button id="btnUpload" class="px-4 py-2 rounded-lg bg-slate-900 text-white hover:opacity-90">Upload</button>
+            </div>
+            <div id="uploadMsg" class="text-sm mt-3 text-slate-600"></div>
+          </div>
+
+          <!-- Chat -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <div class="text-lg font-semibold">RAG Chat</div>
+            <div class="text-sm text-slate-500 mt-1">선택한 tenant/dept 컬렉션에서 검색 후 답변합니다.</div>
+            <div class="mt-4 flex gap-2">
+              <input id="inpQuestion" class="flex-1 px-3 py-2 rounded-lg border border-slate-200" placeholder="예) 의심거래(STR) 판단 포인트 알려줘"/>
+              <button id="btnAsk" class="px-4 py-2 rounded-lg bg-slate-900 text-white hover:opacity-90">Ask</button>
+            </div>
+            <div id="chatBox" class="mt-4 space-y-3"></div>
+          </div>
+
+          <!-- Jobs -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-lg font-semibold">인덱싱 Job 상태</div>
+                <div class="text-sm text-slate-500 mt-1">최근 30건</div>
+              </div>
+              <button id="btnRefreshJobs" class="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+            </div>
+            <div id="jobsBox" class="mt-4 text-sm text-slate-700"></div>
+          </div>
+
+          <!-- Docs -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-lg font-semibold">문서 레지스트리</div>
+                <div class="text-sm text-slate-500 mt-1">tenant/dept 기준 업로드된 문서/버전</div>
+              </div>
+              <button id="btnRefreshDocs" class="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+            </div>
+            <div id="docsBox" class="mt-4 text-sm text-slate-700"></div>
+          </div>
+
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Offcanvas -->
+  <div id="offcanvasBackdrop" class="fixed inset-0 bg-black/30 hidden z-30"></div>
+  <div id="offcanvas" class="fixed top-0 left-0 h-full w-80 bg-white border-r border-slate-200 shadow-xl -translate-x-full transition-transform z-40">
+    <div class="p-5 border-b border-slate-200 flex items-center justify-between">
+      <div>
+        <div class="text-lg font-semibold">Menu</div>
+        <div class="text-xs text-slate-500">Quick navigation</div>
+      </div>
+      <button id="closeOffcanvas" class="w-10 h-10 rounded-lg hover:bg-slate-100">✕</button>
+    </div>
+    <div class="p-4 space-y-2">
+      <button data-scroll="#panelWorkspace" class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100">Workspace</button>
+      <a class="block px-3 py-2 rounded-lg hover:bg-slate-100" href="http://localhost:3000" target="_blank">Flowise</a>
+      <a class="block px-3 py-2 rounded-lg hover:bg-slate-100" href="http://localhost:6333/dashboard" target="_blank">Qdrant</a>
+      <a class="block px-3 py-2 rounded-lg hover:bg-slate-100" href="http://localhost:16686" target="_blank">Jaeger</a>
+      <a class="block px-3 py-2 rounded-lg hover:bg-slate-100" href="http://localhost:3006" target="_blank">Grafana</a>
+    </div>
+    <div class="mt-auto p-4 border-t border-slate-200 text-xs text-slate-500">
+      Tip: 모바일에서는 Offcanvas로 컨텍스트/업로드/채팅을 빠르게 이동합니다.
+    </div>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

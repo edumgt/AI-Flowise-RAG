@@ -1,0 +1,25 @@
+global:
+  namespace: bankrag
+  env: prod
+  qdrantUrl: http://qdrant:6333
+  redisUrl: redis://redis:6379
+  otelEndpoint: http://otel-collector:4318
+
+gateway:
+  enabled: true
+  image: YOUR_ECR_URI/api-gateway:latest
+  servicePort: 3005
+
+worker:
+  enabled: true
+  image: YOUR_ECR_URI/indexing-worker:latest
+
+langchain:
+  enabled: true
+  image: YOUR_ECR_URI/langchain-js:latest
+  servicePort: 3001
+
+llamaindex:
+  enabled: true
+  image: YOUR_ECR_URI/llamaindex-py:latest
+  servicePort: 8000

@@ -1,0 +1,34 @@
+{
+  "family": "bankrag-api-gateway",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "api-gateway",
+      "image": "YOUR_ECR_URI/api-gateway:latest",
+      "portMappings": [
+        {
+          "containerPort": 3005
+        }
+      ],
+      "environment": [
+        {
+          "name": "ENV",
+          "value": "prod"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/bankrag",
+          "awslogs-region": "ap-northeast-2",
+          "awslogs-stream-prefix": "api-gateway"
+        }
+      }
+    }
+  ]
+}

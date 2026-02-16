@@ -1,0 +1,10 @@
+{
+  "note": "This is a minimal placeholder template. In Flowise UI, create a chatflow with Qdrant retriever + Chat model.",
+  "recommended_nodes": [
+    "Document Loader (optional)",
+    "Text Splitter",
+    "Embeddings",
+    "Qdrant Vector Store",
+    "Conversational Retrieval QA Chain"
+  ]
+}

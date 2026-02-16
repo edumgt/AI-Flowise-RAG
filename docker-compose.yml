@@ -1,173 +1,234 @@
-name: bank-rag-workspace
-
+name: bankrag-enterprise
 services:
   qdrant:
-    image: qdrant/qdrant:v1.10.1
-    container_name: qdrant
+    image: qdrant/qdrant:v1.9.5
     ports:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:6333/healthz"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T09-45-05Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-12-13T08-40-52Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set local ${S3_ENDPOINT} ${S3_ACCESS_KEY} ${S3_SECRET_KEY}); do echo 'waiting for minio'; sleep 2; done;
+      /usr/bin/mc mb -p local/${S3_BUCKET} || true;
+      /usr/bin/mc anonymous set download local/${S3_BUCKET} || true;
+      echo 'minio bucket ready';
+      "
+
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # GPU 사용 시 (Docker Desktop + WSL + NVIDIA 드라이버 필요)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
 
   flowise:
-    image: flowiseai/flowise:3.0.13
-    container_name: flowise
-    env_file: .env
-    environment:
-      PORT: 3000
-      FLOWISE_USERNAME: ${FLOWISE_USERNAME:-admin}
-      FLOWISE_PASSWORD: ${FLOWISE_PASSWORD:-admin1234}
-      DATABASE_PATH: /root/.flowise
-      SECRETKEY_PATH: /root/.flowise
-      LOG_PATH: /root/.flowise/logs
-      FLOWISE_FILE_SIZE_LIMIT: 50mb
-      # Observability (optional)
-      OTEL_ENABLED: ${OTEL_ENABLED:-false}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-      OTEL_SERVICE_NAME: bank-rag-flowise
-      ENVIRONMENT: ${ENVIRONMENT:-local}
+    image: flowiseai/flowise:latest
     ports:
-      - "3000:3000"
+      - "${FLOWISE_PORT:-3000}:3000"
+    environment:
+      PORT: "3000"
+      FLOWISE_USERNAME: ${FLOWISE_USERNAME}
+      FLOWISE_PASSWORD: ${FLOWISE_PASSWORD}
+      # You can pass model keys via env too:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     volumes:
       - flowise_data:/root/.flowise
     depends_on:
-      qdrant:
-        condition: service_healthy
-
-  langchain-js:
-    build:
-      context: ./apps/langchain-js
-      dockerfile: Dockerfile
-    container_name: langchain-js
-    env_file: .env
-    environment:
-      PORT: 3001
-      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
-      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_docs}
-      # Observability
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-      OTEL_SERVICE_NAME: bank-rag-langchain
-      ENVIRONMENT: ${ENVIRONMENT:-local}
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./docs:/docs:ro
-      - uploads_data:/data/uploads
-    depends_on:
-      qdrant:
-        condition: service_healthy
-      otel-collector:
-        condition: service_started
-
-  llamaindex-py:
-    build:
-      context: ./apps/llamaindex-py
-      dockerfile: Dockerfile
-    container_name: llamaindex-py
-    env_file: .env
-    environment:
-      PORT: 8000
-      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
-      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_docs}
-      # Observability
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-      OTEL_SERVICE_NAME: bank-rag-llamaindex
-      ENVIRONMENT: ${ENVIRONMENT:-local}
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./docs:/docs:ro
-      - uploads_data:/data/uploads
-    depends_on:
-      qdrant:
-        condition: service_healthy
-      otel-collector:
-        condition: service_started
+      - qdrant
 
   api-gateway:
     build:
       context: ./apps/api-gateway
-      dockerfile: Dockerfile
-    container_name: api-gateway
-    env_file: .env
-    environment:
-      PORT: 3005
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
-      LLAMAINDEX_URL: http://llamaindex-py:8000
-      LANGCHAIN_URL: http://langchain-js:3001
-      DEFAULT_RAG_ENGINE: ${DEFAULT_RAG_ENGINE:-llamaindex}
-      UPLOAD_DIR: /data/uploads
-      # Observability
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-      OTEL_SERVICE_NAME: bank-rag-api-gateway
-      ENVIRONMENT: ${ENVIRONMENT:-local}
     ports:
       - "3005:3005"
+    environment:
+      ENV: ${ENV}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      QDRANT_URL: ${QDRANT_URL}
+      REDIS_URL: ${REDIS_URL}
+      S3_ENABLED: ${S3_ENABLED}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_REGION: ${S3_REGION}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      SERVICE_NAMESPACE: ${SERVICE_NAMESPACE}
+      # Downstream engines
+      LANGCHAIN_URL: http://langchain-js:3001
+      LLAINDEX_URL: http://llamaindex-py:8000
+      FLOWISE_URL: http://flowise:3000
     volumes:
-      - uploads_data:/data/uploads
-      - ./config:/config:ro
+      - uploads_data:/app/data/uploads
+      - jobs_data:/app/data/jobs
+      - registry_data:/app/data/registry
+      - audit_data:/app/data/audit
+      - ./config:/app/config:ro
     depends_on:
-      langchain-js:
-        condition: service_started
-      llamaindex-py:
-        condition: service_started
-      otel-collector:
-        condition: service_started
+      - ollama
+      - redis
+      - qdrant
+      - minio-init
+      - otel-collector
 
-  # ---- Observability stack (OTel -> Jaeger + Prometheus/Grafana) ----
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.102.0
-    container_name: otel-collector
-    command: ["--config=/etc/otelcol/config.yaml"]
+  indexing-worker:
+    build:
+      context: ./apps/indexing-worker
+    environment:
+      ENV: ${ENV}
+      REDIS_URL: ${REDIS_URL}
+      QDRANT_URL: ${QDRANT_URL}
+      S3_ENABLED: ${S3_ENABLED}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_REGION: ${S3_REGION}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      SERVICE_NAMESPACE: ${SERVICE_NAMESPACE}
+      LANGCHAIN_URL: http://langchain-js:3001
+      LLAINDEX_URL: http://llamaindex-py:8000
+      # shared volumes
+      UPLOAD_DIR: /app/data/uploads
+      JOBS_DIR: /app/data/jobs
     volumes:
-      - ./infra/observability/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
-    ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
-      - "9464:9464"   # Prometheus exporter
+      - uploads_data:/app/data/uploads
+      - jobs_data:/app/data/jobs
+      - registry_data:/app/data/registry
+      - audit_data:/app/data/audit
+      - ./config:/app/config:ro
     depends_on:
-      jaeger:
-        condition: service_started
+      - redis
+      - langchain-js
+      - llamaindex-py
+      - otel-collector
+
+  langchain-js:
+    build:
+      context: ./apps/langchain-js
+    environment:
+      ENV: ${ENV}
+      QDRANT_URL: ${QDRANT_URL}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      SERVICE_NAMESPACE: ${SERVICE_NAMESPACE}
+    ports:
+      - "3001:3001"
+    depends_on:
+      - qdrant
+      - ollama
+      - otel-collector
+
+  llamaindex-py:
+    build:
+      context: ./apps/llamaindex-py
+    environment:
+      ENV: ${ENV}
+      QDRANT_URL: ${QDRANT_URL}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      SERVICE_NAMESPACE: ${SERVICE_NAMESPACE}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - qdrant
+      - ollama
+      - otel-collector
 
   jaeger:
-    image: jaegertracing/all-in-one:1.58
-    container_name: jaeger
+    image: jaegertracing/all-in-one:1.57
     ports:
-      - "16686:16686" # UI
-      - "4317:4317"   # OTLP gRPC ingest
+      - "16686:16686"
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP (optional)
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.105.0
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./infra/observability/otel-collector.yaml:/etc/otel-collector.yaml:ro
+    ports:
+      - "4318:4318" # OTLP HTTP
+    depends_on:
+      - jaeger
 
   prometheus:
     image: prom/prometheus:v2.53.1
-    container_name: prometheus
     volumes:
       - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
+    depends_on:
+      - otel-collector
 
   grafana:
     image: grafana/grafana:11.1.0
-    container_name: grafana
     ports:
       - "3006:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin1234
     volumes:
       - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin1234}
     depends_on:
-      prometheus:
-        condition: service_started
+      - prometheus
 
 volumes:
   qdrant_data:
   flowise_data:
   uploads_data:
+  jobs_data:
+  registry_data:
+  audit_data:
+  minio_data:
+  ollama_data:

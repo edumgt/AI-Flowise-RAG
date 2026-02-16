@@ -1,0 +1,23 @@
+{
+  "template": "checklist-based (Flowise export varies by version)",
+  "nodes": [
+    {
+      "type": "qdrant-retriever",
+      "inputs": {
+        "url": "http://qdrant:6333",
+        "collection": "bankrag__{tenant}__{dept}"
+      }
+    },
+    {
+      "type": "prompt-template",
+      "text": "\ub108\ub294 \uc740\ud589\uc5c5\ubb34 \ubcf4\uc870 AI. \ucee8\ud14d\uc2a4\ud2b8 \ubc16 \ucd94\uce21 \uae08\uc9c0. \uc900\ubc95/\ubcf4\uc548 \uc8fc\uc758."
+    },
+    {
+      "type": "chat-model",
+      "provider": "openai|ollama"
+    },
+    {
+      "type": "retrieval-qa-chain"
+    }
+  ]
+}

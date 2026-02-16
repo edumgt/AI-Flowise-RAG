@@ -1,0 +1,38 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bankrag-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: bankrag-gateway }
+  template:
+    metadata:
+      labels: { app: bankrag-gateway }
+    spec:
+      containers:
+        - name: gateway
+          image: {{ .Values.gateway.image }}
+          ports:
+            - containerPort: {{ .Values.gateway.servicePort }}
+          env:
+            - name: ENV
+              value: {{ .Values.global.env | quote }}
+            - name: QDRANT_URL
+              value: {{ .Values.global.qdrantUrl | quote }}
+            - name: REDIS_URL
+              value: {{ .Values.global.redisUrl | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.global.otelEndpoint | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bankrag-gateway
+spec:
+  selector: { app: bankrag-gateway }
+  ports:
+    - port: {{ .Values.gateway.servicePort }}
+      targetPort: {{ .Values.gateway.servicePort }}
+{{- end }}

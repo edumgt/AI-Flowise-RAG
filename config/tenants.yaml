@@ -1,17 +1,9 @@
-# 멀티 테넌트 예시 설정 (은행 업무 조직 기준)
-# - tenant: 은행/법인/사업부 단위 (예: bankA)
-# - dept: 부서 단위 (예: retail, corp, risk, compliance, ops)
 tenants:
-  - id: bankA
-    name: Bank A (Demo)
+  branch:
     depts:
-      - id: retail
-        name: 리테일영업(지점)
-      - id: corp
-        name: 기업금융
-      - id: risk
-        name: 리스크관리
-      - id: compliance
-        name: 준법/AML
-      - id: ops
-        name: 운영/백오피스
+      - teller
+      - risk
+  hq:
+    depts:
+      - aml
+      - compliance

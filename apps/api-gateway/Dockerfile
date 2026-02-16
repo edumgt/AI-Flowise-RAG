@@ -1,14 +1,7 @@
 FROM node:20-alpine
-
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
-
-COPY src ./src
-COPY public ./public
-COPY config ../../config
-RUN mkdir -p /data/uploads /data/indexing
-
-ENV NODE_ENV=production
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+COPY . .
 EXPOSE 3005
-CMD ["node","src/index.js"]
+CMD ["node", "server.js"]

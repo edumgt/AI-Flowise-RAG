@@ -1,0 +1,29 @@
+{
+  "template": "checklist-based (Flowise export varies by version)",
+  "nodes": [
+    {
+      "type": "document-loader",
+      "inputs": {
+        "source": "file|s3|url"
+      }
+    },
+    {
+      "type": "text-splitter",
+      "inputs": {
+        "chunkSize": 800,
+        "overlap": 120
+      }
+    },
+    {
+      "type": "embeddings",
+      "provider": "openai|ollama"
+    },
+    {
+      "type": "qdrant-upsert",
+      "inputs": {
+        "url": "http://qdrant:6333",
+        "collection": "bankrag__{tenant}__{dept}"
+      }
+    }
+  ]
+}

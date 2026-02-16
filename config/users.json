@@ -2,51 +2,55 @@
   "users": [
     {
       "username": "admin",
+      "password": "admin1234",
       "roles": [
         "admin"
       ],
-      "tenant": "bankA",
-      "depts": [
-        "retail",
-        "corp",
-        "risk",
-        "compliance",
-        "ops"
+      "tenants": [
+        "*"
       ],
-      "password_hash": "$2b$12$fuxpU2uqiLqo6pdvJJk1r.Wg3zSQo/WFdcZ3eSXEIybHsyaQyeXa."
+      "depts": [
+        "*"
+      ]
     },
     {
       "username": "teller",
+      "password": "teller1234",
       "roles": [
         "user"
       ],
-      "tenant": "bankA",
-      "depts": [
-        "retail"
+      "tenants": [
+        "branch"
       ],
-      "password_hash": "$2b$12$AMtQpm.vK6uQjA0NQaiCves3gaSqItOOla1kxDKJ8xqommP54LvZy"
+      "depts": [
+        "teller"
+      ]
     },
     {
       "username": "risk",
+      "password": "risk1234",
       "roles": [
         "user"
       ],
-      "tenant": "bankA",
+      "tenants": [
+        "branch"
+      ],
       "depts": [
         "risk"
-      ],
-      "password_hash": "$2b$12$Nzz.kud91kYeq5DwbFxBK.4aiyw5DlnD4DUQ2vX1FdlR7Lp1RHydG"
+      ]
     },
     {
       "username": "aml",
+      "password": "aml1234",
       "roles": [
         "user"
       ],
-      "tenant": "bankA",
-      "depts": [
-        "compliance"
+      "tenants": [
+        "hq"
       ],
-      "password_hash": "$2b$12$Ot5RAQ8Ku/nS5Ttf1L8Vs.zaJHF73g0BO1VN0wAdWLpQhUtiMZjB."
+      "depts": [
+        "aml"
+      ]
     }
   ]
 }
