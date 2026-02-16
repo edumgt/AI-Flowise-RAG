@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: { { include "bank-rag.fullname" . } }-llamaindex
+spec:
+  replicas: { { .Values.llamaindex.replicaCount } }
+  selector:
+    matchLabels:
+      app: llamaindex
+  template:
+    metadata:
+      labels:
+        app: llamaindex
+    spec:
+      containers:
+        - name: llamaindex
+          image: { { .Values.llamaindex.image } }
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: PORT
+              value: "8000"
+            - name: ENVIRONMENT
+              value: { { .Values.global.environment | quote } }
+            - name: OTEL_ENABLED
+              value: { { ternary "true" "false" .Values.global.otel.enabled | quote } }
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: { { .Values.global.otel.endpoint | quote } }
+          - name: QDRANT_URL
+            value: "http://qdrant:6333"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llamaindex
+spec:
+  type: { { .Values.llamaindex.service.type } }
+  selector:
+    app: llamaindex
+  ports:
+    - name: http
+      port: { { .Values.llamaindex.service.port } }
+      targetPort: 8000

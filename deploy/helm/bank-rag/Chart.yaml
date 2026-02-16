@@ -1,0 +1,6 @@
+apiVersion: v2
+name: bank-rag
+description: Bank RAG Workspace (Flowise + Gateway + LangChain + LlamaIndex + Qdrant + OTel)
+type: application
+version: 0.1.0
+appVersion: "0.2.0"

@@ -1,0 +1,57 @@
+{
+  "family": "bank-rag-api-gateway",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "api-gateway",
+      "image": "<ACCOUNT>.dkr.ecr.<REGION>.amazonaws.com/bank-rag/api-gateway:latest",
+      "portMappings": [
+        {
+          "containerPort": 3005,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "PORT",
+          "value": "3005"
+        },
+        {
+          "name": "DEFAULT_RAG_ENGINE",
+          "value": "llamaindex"
+        },
+        {
+          "name": "LLAMAINDEX_URL",
+          "value": "http://llamaindex-py:8000"
+        },
+        {
+          "name": "LANGCHAIN_URL",
+          "value": "http://langchain-js:3001"
+        },
+        {
+          "name": "OTEL_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "OTEL_EXPORTER_OTLP_ENDPOINT",
+          "value": "http://otel-collector:4318"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "JWT_SECRET",
+          "valueFrom": "<SECRETS_MANAGER_ARN>"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "<SECRETS_MANAGER_ARN>"
+        }
+      ]
+    }
+  ]
+}

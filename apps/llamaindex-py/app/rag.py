@@ -1,33 +1,39 @@
+from typing import Optional
+from llama_index.core import VectorStoreIndex, StorageContext
 from qdrant_client import QdrantClient
-from llama_index.core import VectorStoreIndex
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 
 from .settings import configure_llamaindex, qdrant_config
 
 
-def query(question: str, top_k: int = 5) -> dict:
+def _load_index(collection: str) -> VectorStoreIndex:
     configure_llamaindex()
-    url, collection = qdrant_config()
+    url, _ = qdrant_config()
     client = QdrantClient(url=url)
 
     vector_store = QdrantVectorStore(client=client, collection_name=collection)
-    index = VectorStoreIndex.from_vector_store(vector_store)
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    return VectorStoreIndex.from_vector_store(vector_store=vector_store, storage_context=storage_context)
+
+
+def query(question: str, top_k: int = 5, collection: Optional[str] = None) -> dict:
+    _, default_collection = qdrant_config()
+    col = collection or default_collection
+    index = _load_index(col)
 
     qe = index.as_query_engine(similarity_top_k=top_k)
     resp = qe.query(question)
 
-    # response object... to string
-    text = str(resp)
-
-    # Attempt to surface sources
+    # LlamaIndex response may include source nodes
     sources = []
-    if hasattr(resp, "source_nodes") and resp.source_nodes:
-        for i, n in enumerate(resp.source_nodes):
-            meta = getattr(n.node, "metadata", {}) or {}
+    try:
+        for sn in getattr(resp, "source_nodes", [])[:6]:
+            meta = getattr(sn.node, "metadata", {}) or {}
             sources.append({
-                "ref": f"#{i+1}",
-                "score": getattr(n, "score", None),
-                "source": meta.get("file_path") or meta.get("file_name") or meta.get("source") or "unknown",
+                "source": meta.get("source") or meta.get("file"),
+                "score": getattr(sn, "score", None),
             })
+    except Exception:
+        pass
 
-    return {"answer": text, "sources": sources}
+    return {"answer": str(resp), "sources": sources, "collection": col}

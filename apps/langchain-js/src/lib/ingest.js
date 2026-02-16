@@ -1,5 +1,7 @@
 const fs = require("fs");
 const path = require("path");
+const pdfParse = require("pdf-parse");
+const mammoth = require("mammoth");
 const { Document } = require("@langchain/core/documents");
 const { RecursiveCharacterTextSplitter } = require("@langchain/textsplitters");
 
@@ -19,24 +21,55 @@ function listFiles(dir) {
   return out;
 }
 
-async function ingestSampleDocs() {
-  const embeddings = getEmbeddings();
-  const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 800, chunkOverlap: 120 });
-
-  const files = listFiles(SAMPLE_DIR).filter((f) => /\.(md|txt)$/i.test(f));
-  const docs = files.map((file) => new Document({
-    pageContent: fs.readFileSync(file, "utf8"),
-    metadata: { source: path.relative(process.cwd(), file), file },
-  }));
-
-  const chunks = await splitter.splitDocuments(docs);
-  chunks.forEach((d, idx) => {
-    d.metadata._id = `${d.metadata.source}::${idx}`;
-    d.metadata.chunk = idx;
-  });
-
-  const res = await upsertDocuments({ embeddings, documents: chunks });
-  return { files: files.length, chunks: res.count };
+async function parseFile(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".txt" || ext === ".md" || ext === ".markdown") {
+    return fs.readFileSync(filePath, "utf-8");
+  }
+  if (ext === ".pdf") {
+    const buf = fs.readFileSync(filePath);
+    const data = await pdfParse(buf);
+    return data.text || "";
+  }
+  if (ext === ".docx") {
+    const buf = fs.readFileSync(filePath);
+    const { value } = await mammoth.extractRawText({ buffer: buf });
+    return value || "";
+  }
+  throw new Error(`unsupported_file_type: ${ext}`);
 }
 
-module.exports = { ingestSampleDocs, SAMPLE_DIR };
+async function ingestText(text, meta, collection) {
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 900,
+    chunkOverlap: 120,
+  });
+
+  const docs = await splitter.createDocuments([text], [meta]);
+  const embeddings = await getEmbeddings();
+  const inserted = await upsertDocuments({ docs, embeddings, collection });
+  return { inserted, chunks: docs.length };
+}
+
+async function ingestFileByPath(filePath, collection, extraMeta = {}) {
+  const text = await parseFile(filePath);
+  const meta = { source: path.basename(filePath), file: filePath, ...extraMeta };
+  return ingestText(text, meta, collection);
+}
+
+async function ingestSampleDocs() {
+  const files = listFiles(SAMPLE_DIR).filter((f) => /\.(md|txt)$/i.test(f));
+  let inserted = 0;
+  let chunks = 0;
+
+  for (const f of files) {
+    const text = fs.readFileSync(f, "utf-8");
+    const out = await ingestText(text, { source: path.relative(SAMPLE_DIR, f), file: f }, process.env.QDRANT_COLLECTION);
+    inserted += out.inserted;
+    chunks += out.chunks;
+  }
+
+  return { inserted, chunks, files: files.length };
+}
+
+module.exports = { ingestSampleDocs, ingestFileByPath, parseFile, SAMPLE_DIR };

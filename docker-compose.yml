@@ -1,4 +1,4 @@
-name: flowise-rag-examples
+name: bank-rag-workspace
 
 services:
   qdrant:
@@ -22,11 +22,15 @@ services:
       PORT: 3000
       FLOWISE_USERNAME: ${FLOWISE_USERNAME:-admin}
       FLOWISE_PASSWORD: ${FLOWISE_PASSWORD:-admin1234}
-      # Persist Flowise sqlite DB + secrets + logs
       DATABASE_PATH: /root/.flowise
       SECRETKEY_PATH: /root/.flowise
       LOG_PATH: /root/.flowise/logs
       FLOWISE_FILE_SIZE_LIMIT: 50mb
+      # Observability (optional)
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: bank-rag-flowise
+      ENVIRONMENT: ${ENVIRONMENT:-local}
     ports:
       - "3000:3000"
     volumes:
@@ -35,42 +39,135 @@ services:
       qdrant:
         condition: service_healthy
 
-  langchain_api:
+  langchain-js:
     build:
       context: ./apps/langchain-js
       dockerfile: Dockerfile
-    container_name: langchain-api
+    container_name: langchain-js
     env_file: .env
     environment:
       PORT: 3001
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_docs}
+      # Observability
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: bank-rag-langchain
+      ENVIRONMENT: ${ENVIRONMENT:-local}
     ports:
       - "3001:3001"
     volumes:
       - ./docs:/docs:ro
+      - uploads_data:/data/uploads
     depends_on:
       qdrant:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
 
-  llamaindex_api:
+  llamaindex-py:
     build:
       context: ./apps/llamaindex-py
       dockerfile: Dockerfile
-    container_name: llamaindex-api
+    container_name: llamaindex-py
     env_file: .env
     environment:
       PORT: 8000
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_docs}
+      # Observability
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: bank-rag-llamaindex
+      ENVIRONMENT: ${ENVIRONMENT:-local}
     ports:
       - "8000:8000"
     volumes:
       - ./docs:/docs:ro
+      - uploads_data:/data/uploads
     depends_on:
       qdrant:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  api-gateway:
+    build:
+      context: ./apps/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    env_file: .env
+    environment:
+      PORT: 3005
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      LLAMAINDEX_URL: http://llamaindex-py:8000
+      LANGCHAIN_URL: http://langchain-js:3001
+      DEFAULT_RAG_ENGINE: ${DEFAULT_RAG_ENGINE:-llamaindex}
+      UPLOAD_DIR: /data/uploads
+      # Observability
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: bank-rag-api-gateway
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+    ports:
+      - "3005:3005"
+    volumes:
+      - uploads_data:/data/uploads
+      - ./config:/config:ro
+    depends_on:
+      langchain-js:
+        condition: service_started
+      llamaindex-py:
+        condition: service_started
+      otel-collector:
+        condition: service_started
+
+  # ---- Observability stack (OTel -> Jaeger + Prometheus/Grafana) ----
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.102.0
+    container_name: otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infra/observability/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "9464:9464"   # Prometheus exporter
+    depends_on:
+      jaeger:
+        condition: service_started
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: jaeger
+    ports:
+      - "16686:16686" # UI
+      - "4317:4317"   # OTLP gRPC ingest
+
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    container_name: prometheus
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    ports:
+      - "3006:3000"
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin1234}
+    depends_on:
+      prometheus:
+        condition: service_started
 
 volumes:
   qdrant_data:
   flowise_data:
+  uploads_data:

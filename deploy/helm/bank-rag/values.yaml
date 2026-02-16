@@ -1,0 +1,65 @@
+imagePullSecrets: []
+namespaceOverride: ""
+
+global:
+  environment: "k8s"
+  otel:
+    enabled: true
+    endpoint: "http://otel-collector:4318"
+
+apiGateway:
+  image: "bank-rag/api-gateway:latest"
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3005
+  env:
+    DEFAULT_RAG_ENGINE: "llamaindex"
+
+langchain:
+  image: "bank-rag/langchain-js:latest"
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3001
+
+llamaindex:
+  image: "bank-rag/llamaindex-py:latest"
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8000
+
+qdrant:
+  enabled: true
+  image: "qdrant/qdrant:v1.10.1"
+  service:
+    type: ClusterIP
+    port: 6333
+  persistence:
+    enabled: true
+    size: 10Gi
+
+flowise:
+  enabled: true
+  image: "flowiseai/flowise:3.0.13"
+  service:
+    type: ClusterIP
+    port: 3000
+
+otelCollector:
+  enabled: true
+  image: "otel/opentelemetry-collector-contrib:0.102.0"
+  service:
+    portGrpc: 4317
+    portHttp: 4318
+
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts:
+    - host: bank-rag.local
+      paths:
+        - path: /
+          service: api-gateway
+          port: 3005
