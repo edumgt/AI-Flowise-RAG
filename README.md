@@ -1,4 +1,5 @@
-# BankRAG Enterprise Reference Repo (Flowise + LangChain JS + LlamaIndex Py)
+# BankRAG Enterprise Reference
+- (Flowise + LangChain JS + LlamaIndex Py)
 
 ![alt text](./images/image.png)
 
